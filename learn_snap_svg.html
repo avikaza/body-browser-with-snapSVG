@@ -1,0 +1,176 @@
+<html>
+<head>
+    <script src="snap.svg-min.js"></script>
+</head>
+<body>
+    <script>
+        var s = Snap(),
+            Aortic_Balloon_Pump,
+            PFO_Device,
+            Occlusion,
+            Stenosis,
+            targetVessel,
+            actionIconsPlaced = false,
+            curScaleFactor = 1,
+            g,
+            coronory_detail,
+            coronory_hotspots,
+            hiliteColor="#0000ff",
+            baseVesselOpacity=0.3,
+            actionIconOpacityStart=0.2,
+            animationDuration=1500,
+            zoomStep = 0.05,
+            switchToDetailAtZoom = 2.4,
+            isInDetailMode = false,
+            t = new Snap.Matrix(),
+            curCs = {x:0, y:0},
+            curOs = {x:0, y:0},
+            zoomCenter = {x:0, y:0},
+            normalVessels;
+        Snap.load("ZHealth-Symbols.svg", function (f) {
+          Aortic_Balloon_Pump = f.select("g#Aortic_Balloon_Pump");
+          PFO_Device = f.select("g#PFO_Device");
+          Occlusion = f.select("g#Occlusion");
+          Stenosis = f.select("g#Stenosis");
+          Aortic_Balloon_Pump.click(function (evt) {
+              alert("Aoratic_Balloon_Pump On :" + targetVessel);
+          });
+          PFO_Device.click(function (evt) {
+              alert("PFO_Device On :" + targetVessel);
+          });
+          Occlusion.click(function (evt) {
+              alert("Occlusion On : " + targetVessel);
+          });
+          Stenosis.click(function (evt) {
+              alert("Stenosis On : " + targetVessel);
+          });
+        });
+        Snap.load("Body-Detail.svg", function (f) {
+            f.selectAll("path[id^='vessel']").attr({
+                fill: hiliteColor,
+                opacity: baseVesselOpacity
+            });
+            var vesselClickHandler = function (evt) {
+                targetVessel = evt.target.id;
+                var t1 = new Snap.Matrix();
+                Aortic_Balloon_Pump.attr({opacity:actionIconOpacityStart});
+                PFO_Device.attr({opacity:actionIconOpacityStart});
+                Occlusion.attr({opacity:actionIconOpacityStart});
+                Stenosis.attr({opacity:actionIconOpacityStart});
+
+                t1.translate(evt.clientX, evt.clientY - 20);
+                t1.scale(1.5);
+                Aortic_Balloon_Pump.transform(t1);
+                s.append(Aortic_Balloon_Pump);
+
+                t1.translate(0, 20);
+                Occlusion.transform(t1);
+                s.append(Occlusion);
+
+                t1.translate(-26, -14);
+                PFO_Device.transform(t1);
+                s.append(PFO_Device);
+
+                t1.translate(0 , 20);
+                Stenosis.transform(t1);
+                s.append(Stenosis);
+
+                Aortic_Balloon_Pump.animate({opacity:1}, animationDuration);
+                PFO_Device.animate({opacity:1}, animationDuration);
+                Occlusion.animate({opacity:1}, animationDuration);
+                Stenosis.animate({opacity:1}, animationDuration);
+                actionIconsPlaced = true;
+            };
+            var vesselMouseMoveHandler = function (evt) {
+               this.attr({opacity:1});
+            };
+            var vesselMouseOutHandler = function (evt) {
+               this.attr({opacity:baseVesselOpacity});
+            };
+            normalVessels = f.selectAll("path[id^='vessel-']");
+            var canvasRect = f.select("rect#canvas-rect").mousedown(function (evt) {
+               if(actionIconsPlaced) {removeActionIcons();}
+            });
+            coronory_detail = f.select("g#Coronary_Detail").attr({opacity:0});
+            coronory_hotspots = f.select("g#Coronary_Detail_Hotspots").attr({opacity:0});
+            //coronory_vessels = f.selectAll
+            g = s.group(f.select("g#body-matrix"), coronory_detail, coronory_hotspots);
+            s.append(g);
+            for (var i= 0; i < normalVessels.length; i++) {
+                normalVessels[i].click(vesselClickHandler);
+                normalVessels[i].mousemove(vesselMouseMoveHandler);
+                normalVessels[i].mouseout(vesselMouseOutHandler);
+                normalVessels[i].node.style.cursor="crosshair";
+            }
+            var dragging = function (dx, dy, posx, posy) {
+                t = new Snap.Matrix();
+                curCs.x = posx - curOs.x;
+                curCs.y = posy - curOs.y;
+                if(curScaleFactor !== 1) {
+                    t.scale(curScaleFactor, curScaleFactor, zoomCenter.x, zoomCenter.y);
+                }
+                t.translate(curCs.x, curCs.y);
+                this.transform(t);
+            };
+            var startDrag = function(posx, posy){
+                curOs.x = posx - curCs.x;
+                curOs.y = posy - curCs.y;
+            };
+            var removeActionIcons = function () {
+                Aortic_Balloon_Pump.remove();
+                PFO_Device.remove();
+                Occlusion.remove();
+                Stenosis.remove();
+                actionIconsPlaced = false;
+            };
+            var stopDrag = function() {
+                console.log("drag stopped")
+            };
+            g.drag( dragging,
+                    startDrag,
+                    stopDrag
+                  );
+            var zoomHandler = function zoomHandler(evt) {
+                t = new Snap.Matrix();
+                if((evt.wheelDelta && evt.wheelDelta > 0) || evt.detail < 0) {
+                    curScaleFactor = curScaleFactor - zoomStep/curScaleFactor;
+                } else {
+                    curScaleFactor = curScaleFactor + zoomStep/curScaleFactor;
+                }
+                t.scale(curScaleFactor, curScaleFactor, evt.clientX - curCs.x, evt.clientY - curCs.y);
+                //t.scale(curScaleFactor);
+                zoomCenter = {x:evt.clientX - curCs.x, y:evt.clientY - curCs.y};
+                t.translate(curCs.x, curCs.y);
+                g.transform(t);
+                if(curScaleFactor > switchToDetailAtZoom && !isInDetailMode) {
+                   flipDetail();
+                }else if (curScaleFactor < switchToDetailAtZoom && isInDetailMode){
+                    flipDetail();
+                }
+                if(actionIconsPlaced) {removeActionIcons();}
+                return false;
+            }
+            document.addEventListener("mousewheel", zoomHandler, false);
+            document.addEventListener("DOMMouseScroll", zoomHandler, false);
+        });
+        var flipDetail = function () {
+            if(!isInDetailMode) {
+                for (var i = 0; i < normalVessels.length; i = i + 1) {
+                    normalVessels[i].animate({opacity:0}, animationDuration);
+                }
+                coronory_detail.animate({opacity:1}, animationDuration);
+                coronory_hotspots.animate({opacity:baseVesselOpacity, fill: hiliteColor}, animationDuration);
+                isInDetailMode = true;
+            } else {
+                for (var i = 0; i < normalVessels.length; i = i + 1) {
+                    normalVessels[i].animate({opacity:baseVesselOpacity}, animationDuration);
+                }
+                coronory_detail.animate({opacity:0}, animationDuration);
+                coronory_hotspots.animate({opacity:0}, animationDuration);
+                isInDetailMode = false;
+            }
+
+        }
+    </script>
+</body>
+</html>
